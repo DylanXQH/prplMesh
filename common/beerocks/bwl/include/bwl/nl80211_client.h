@@ -8,9 +8,31 @@
 #ifndef __BWL_NL80211_CLIENT_H__
 #define __BWL_NL80211_CLIENT_H__
 
+#include <bcl/beerocks_defines.h>
+#include <bcl/beerocks_message_structs.h>
+#include <bcl/son/son_wireless_utils.h>
 #include <tlvf/common/sMacAddr.h>
 
+#include <algorithm>
 #include <string>
+#include <unordered_map>
+#include <vector>
+
+/**
+ * @brief Length of HT MCS set.
+ *
+ * According to <linux/nl80211.h>, NL80211_BAND_ATTR_HT_MCS_SET is a 16-byte attribute containing
+ * the MCS set as defined in 802.11n
+ */
+static constexpr size_t ht_mcs_set_size = 16;
+
+/**
+ * @brief Length of VHT MCS set.
+ *
+ * According to <linux/nl80211.h>, NL80211_BAND_ATTR_VHT_MCS_SET is a 32-byte attribute containing
+ * the MCS set as defined in 802.11ac
+ */
+static constexpr size_t vht_mcs_set_size = 32;
 
 namespace bwl {
 
@@ -33,6 +55,138 @@ namespace bwl {
 class nl80211_client {
 
 public:
+    /**
+     * @brief Channel information
+     *
+     * Used in sBandInfo structure as each band contains a map of supported channels.
+     *
+     * Information obtained with NL80211_CMD_GET_WIPHY command through a NL80211 socket.
+     * See NL80211_FREQUENCY_ATTR_* in <linux/nl80211.h> for a description of each field.
+     */
+    struct sChannelInfo {
+
+        /**
+         * Channel number.
+         * Obtained from NL80211_FREQUENCY_ATTR_FREQ (see 802.11-2007 17.3.8.3.2 and Annex J)
+         */
+        uint8_t number = 0;
+
+        /**
+         * Supported channel bandwidths.
+         */
+        std::vector<beerocks::eWiFiBandwidth> supported_bandwidths;
+
+        /**
+         * Maximum transmission power in dBm.
+         * Obtained as 0.01 * NL80211_FREQUENCY_ATTR_MAX_TX_POWER
+         */
+        uint8_t tx_pow = 0;
+
+        /**
+         * Radar detection is mandatory on this channel in current regulatory domain.
+         * Set to true if attribute NL80211_FREQUENCY_ATTR_RADAR is present.
+         */
+        bool is_dfs = false;
+
+        /**
+         * True if current state for DFS is NL80211_DFS_UNAVAILABLE.
+         * Obtained from NL80211_FREQUENCY_ATTR_DFS_STATE
+         */
+        bool radar_affected = false;
+
+        /**
+         * @brief Gets the maximum supported bandwidth by the channel.
+         *
+         * @return Maximum supported bandwidth
+         */
+        beerocks::eWiFiBandwidth get_max_bandwidth() const
+        {
+            if (supported_bandwidths.empty()) {
+                return beerocks::eWiFiBandwidth::BANDWIDTH_UNKNOWN;
+            }
+
+            return *std::max_element(supported_bandwidths.begin(), supported_bandwidths.end());
+        }
+    };
+
+    /**
+     * @brief Band information
+     *
+     * Used in sRadioInfo structure as each radio contains a list of bands.
+     *
+     * Information obtained with NL80211_CMD_GET_WIPHY command through a NL80211 socket.
+     * See NL80211_BAND_ATTR_* in <linux/nl80211.h> for a description of each field.
+     */
+    struct sBandInfo {
+
+        /**
+         * Value of NL80211_BAND_ATTR_HT_CAPA, see iw/util.c print_ht_capability() as a bit
+         * interpretation example.
+         */
+        uint16_t ht_capability = 0;
+
+        /**
+         * Value of NL80211_BAND_ATTR_HT_MCS_SET, see iw/util.c print_ht_mcs() as a byte
+         * interpretation example.
+         */
+        uint8_t ht_mcs_set[ht_mcs_set_size];
+
+        /**
+         * Value of NL80211_BAND_ATTR_VHT_CAPA, see iw/util.c print_vht_info() as a bit
+         * interpretation example.
+         */
+        uint32_t vht_capability = 0;
+
+        /**
+         * Value of NL80211_BAND_ATTR_VHT_MCS_SET, see iw/util.c print_vht_info() as a byte
+         * interpretation example.
+         */
+        uint8_t vht_mcs_set[vht_mcs_set_size];
+
+        /**
+         * Channels supported in this band (obtained from NL80211_BAND_ATTR_FREQS).
+         * Map key is the channel number and map value is the channel information.
+         */
+        std::unordered_map<uint8_t, sChannelInfo> supported_channels;
+
+        /**
+         * @brief Gets the frequency band of this band.
+         *
+         * Return value can be obtained from whatever of the supported channels.
+         *
+         * @return Frequency band
+         */
+        beerocks::eFreqType get_frequency_band() const
+        {
+            if (supported_channels.empty()) {
+                return beerocks::eFreqType::FREQ_UNKNOWN;
+            }
+
+            return son::wireless_utils::which_freq(supported_channels.begin()->first);
+        }
+
+        /**
+         * @brief Checks if this band is the 5GHz band.
+         *
+         * @return True if this band is the 5GHz band and false otherwise.
+         */
+        bool is_5ghz_band() const { return beerocks::eFreqType::FREQ_5G == get_frequency_band(); }
+    };
+
+    /**
+     * @brief Radio information
+     *
+     * Information obtained with NL80211_CMD_GET_WIPHY command through a NL80211 socket.
+     * See <linux/nl80211.h> for a description of each field.
+     */
+    struct sRadioInfo {
+
+        /**
+         * Bands included in this radio (obtained from NL80211_ATTR_WIPHY_BANDS)
+         */
+        std::vector<sBandInfo> bands;
+    };
+
     /**
      * @brief Station information
      *
@@ -59,6 +213,18 @@ public:
     virtual ~nl80211_client() = default;
 
     /**
+     * @brief Gets radio information.
+     *
+     * Radio information contains HT/VHT capabilities and the list of supported channels.
+     *
+     * @param[in] interface_name Interface name, either radio or Virtual AP (VAP).
+     * @param[out] radio_info Radio information.
+     *
+     * @return True on success and false otherwise.
+     */
+    virtual bool get_radio_info(const std::string &interface_name, sRadioInfo &radio_info) = 0;
+
+    /**
      * @brief Gets station information.
      *
      * Station information contains basically metrics associated to the link between given local
@@ -72,6 +238,7 @@ public:
      */
     virtual bool get_sta_info(const std::string &local_interface_name,
                               const sMacAddr &sta_mac_address, sStaInfo &sta_info) = 0;
+
     /**
      * @brief Set the tx power limit
      *
@@ -82,8 +249,6 @@ public:
      * @return true success and false otherwise
      */
     virtual bool set_tx_power_limit(const std::string &local_interface_name, uint32_t limit) = 0;
-
-    // TODO: add remaining methods
 };
 
 } // namespace bwl

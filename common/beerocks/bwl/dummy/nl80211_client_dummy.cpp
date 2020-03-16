@@ -8,11 +8,63 @@
 
 #include "nl80211_client_dummy.h"
 
+#include <bcl/beerocks_utils.h>
+
 namespace bwl {
 
 nl80211_client_dummy::nl80211_client_dummy() {}
 
 nl80211_client_dummy::~nl80211_client_dummy() {}
+
+bool nl80211_client_dummy::get_radio_info(const std::string &interface_name, sRadioInfo &radio_info)
+{
+    // Suppress "unused parameter" warning
+    (void)interface_name;
+
+    sBandInfo band{};
+
+    // 5GHz simulated report
+    for (uint16_t ch = 36; ch <= 64; ch += 4) {
+        for (uint16_t step = 0; step < 3; step++) {
+            sChannelInfo channel;
+
+            channel.number = ch;
+            channel.supported_bandwidths.push_back(
+                beerocks::utils::convert_bandwidth_to_enum(20 + step * 20));
+            channel.is_dfs = (ch > 48);
+
+            band.supported_channels[channel.number] = channel;
+        }
+    }
+    for (uint16_t ch = 100; ch <= 144; ch += 4) {
+        for (uint16_t step = 0; step < 3; step++) {
+            sChannelInfo channel;
+
+            channel.number = ch;
+            channel.supported_bandwidths.push_back(
+                beerocks::utils::convert_bandwidth_to_enum(20 + step * 20));
+            channel.is_dfs = true;
+
+            band.supported_channels[channel.number] = channel;
+        }
+    }
+    for (uint16_t ch = 149; ch <= 165; ch += 4) {
+        for (uint16_t step = 0; step < 3; step++) {
+            sChannelInfo channel;
+
+            channel.number = ch;
+            channel.supported_bandwidths.push_back(
+                beerocks::utils::convert_bandwidth_to_enum(20 + step * 20));
+            channel.is_dfs = false;
+
+            band.supported_channels[channel.number] = channel;
+        }
+    }
+
+    radio_info.bands.push_back(band);
+
+    return true;
+}
 
 bool nl80211_client_dummy::get_sta_info(const std::string &local_interface_name,
                                         const sMacAddr &sta_mac_address, sStaInfo &sta_info)

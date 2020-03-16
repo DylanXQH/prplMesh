@@ -32,6 +32,18 @@ public:
     virtual ~nl80211_client_dummy();
 
     /**
+     * @brief Gets radio information.
+     *
+     * Radio information contains HT/VHT capabilities and the list of supported channels.
+     *
+     * @param[in] interface_name Interface name, either radio or Virtual AP (VAP).
+     * @param[out] radio_info Radio information.
+     *
+     * @return True on success and false otherwise.
+     */
+    virtual bool get_radio_info(const std::string &interface_name, sRadioInfo &radio_info) override;
+
+    /**
      * @brief Gets station information.
      *
      * Fills station information with dummy data.
