@@ -126,15 +126,15 @@ class TestFlows:
         device_ip = re.search(r'inet (?P<ip>[0-9.]+)', device_ip_output.decode('utf-8')).group('ip')
         return UCCSocket(device_ip, ucc_port)
 
-    def init(self):
+    def init(self, unique_id: str, skip_init: bool = False):
         '''Initialize the tests.'''
         self.start_test('init')
-        self.gateway = 'gateway-' + self.opts.unique_id
-        self.repeater1 = 'repeater1-' + self.opts.unique_id
-        self.repeater2 = 'repeater2-' + self.opts.unique_id
+        self.gateway = 'gateway-' + unique_id
+        self.repeater1 = 'repeater1-' + unique_id
+        self.repeater2 = 'repeater2-' + unique_id
 
         inspect = json.loads(subprocess.check_output(('docker', 'network', 'inspect',
-                                                        'prplMesh-net-{}'.format(self.opts.unique_id))))
+                                                        'prplMesh-net-{}'.format(unique_id))))
         prplmesh_net = inspect[0]
         # podman adds a 'plugins' indirection that docker doesn't have.
         if 'plugins' in prplmesh_net:
@@ -147,11 +147,11 @@ class TestFlows:
 
         env.environment = env.TestEnvironment(bridge)
 
-        if not self.opts.skip_init:
+        if not skip_init:
             self.tcpdump_start()
             try:
                 subprocess.check_call((os.path.join(self.rootdir, "tests", "test_gw_repeater.sh"),
-                                       "-f", "-u", self.opts.unique_id, "-g", self.gateway,
+                                       "-f", "-u", unique_id, "-g", self.gateway,
                                        "-r", self.repeater1, "-r", self.repeater2, "-d", "7"))
             finally:
                 env.environment.tcpdump_kill()
@@ -738,7 +738,6 @@ if __name__ == '__main__':
     opts.tcpdump = options.tcpdump
     opts.stop_on_failure = options.stop_on_failure
 
-    t.opts = options
-    t.init()
+    t.init(options.unique_id, options.skip_init)
     if t.run_tests(options.tests):
         sys.exit(1)
