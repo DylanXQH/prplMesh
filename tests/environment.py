@@ -33,6 +33,7 @@ class AlEntity:
         self.mac = mac
         self.ucc_socket = ucc_socket
         self.is_controller = is_controller
+        self.radios = {}
 
         # Convenience functions that propagate to ucc_socket
         self.cmd_reply = self.ucc_socket.cmd_reply
@@ -42,6 +43,18 @@ class AlEntity:
     def command(self, *command: str) -> bytes:
         '''Run `command` on the device and return its output as bytes.'''
         raise NotImplementedError("command is not implemented in abstract class AlEntity")
+
+
+class Radio:
+    '''Abstract representation of a radio on a MultiAP agent.
+
+    This provides basic information about the radio, e.g. its mac address, and functionality for
+    checking its status.
+    '''
+    def __init__(self, agent: AlEntity, mac: str):
+        self.agent = agent
+        agent.radios[mac] = self
+        self.mac = mac
 
 
 class AlEntityDocker(AlEntity):
