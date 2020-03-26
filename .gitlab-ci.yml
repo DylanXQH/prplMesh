@@ -94,8 +94,6 @@ upload-artifacts:
   script:
     - echo "machine ftp.essensium.com login prplmesh-robot-ci password $CI_OWNCLOUD_PASSWORD" > "~/.netrc"
     - ci/upload_to_owncloud.sh artifacts ./logs
-  rules:
-    - if: $CI_COMMIT_BRANCH == "master"
   dependencies:
     - build-in-docker
     - build-for-netgear-rax40
