@@ -4639,8 +4639,11 @@ bool slave_thread::handle_channel_selection_request(Socket *sd, ieee1905_1::Cmdu
     bool power_limit_received = channel_selection_get_transmit_power_limit(cmdu_rx, power_limit);
 
     // No preferences or power limit for current ruid
-    if (channel_preferences.empty() && !power_limit_received)
+    if (channel_preferences.empty() && !power_limit_received) {
+        LOG(DEBUG) << "Empty channel request recieved";
+        send_operating_channel_report();
         return true;
+    }
 
     // According to design only Resticted channels should be included in channel selection request
     auto switch_required = channel_selection_current_channel_restricted();
